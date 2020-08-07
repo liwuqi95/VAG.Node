@@ -1,6 +1,6 @@
 FROM keymetrics/pm2:12-jessie
 
-RUN apt-get update && apt-get install -y ffmpeg vim cron
+RUN apt-get update && apt-get install -y vim cron
 
 COPY . /usr/src/app
 

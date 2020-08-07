@@ -6,121 +6,122 @@ const NodeSipSession = require('./GB28181Session');
 
 //GB28181 SIP服务器
 class NodeSIPServer {
-    constructor(config) {
-        this.listen = config.GB28181.sipServer.listen || 5060;
-        this.defaultPassword = config.GB28181.sipServer.password || '12345678';
-        this.config = config;
-        //临时用户信息
-        this.userinfo = {};
-        //会话
-        this.dialogs = {};
-    }
+  constructor(config) {
+    this.listen = config.GB28181.sipServer.listen || 5060;
+    this.defaultPassword = config.GB28181.sipServer.password || '12345678';
+    this.host = config.sipServer.host || '0.0.0.0';
+    this.config = config;
+    //临时用户信息
+    this.userinfo = {};
+    //会话
+    this.dialogs = {};
+  }
 
-    run() {
+  run() {
 
-        //监听端口，接收消息
-        this.uas = SIP.create({ port: this.listen, logger: Logger }, (request) => {
-            switch (request.method) {
-                //当前域 注册/注销 REGISTER
-                case 'REGISTER':
-                    context.nodeEvent.emit('register', request);
-                    break;
-                //上级域/媒体接收者 INVITE
-                case 'INVITE':
-                    context.nodeEvent.emit('invite', request);
-                    break;
-                //当前域 MESSAGE 消息
-                case 'MESSAGE':
-                    context.nodeEvent.emit('message', request);
-                    break;
-                //上级域/媒体接收者 ACK/BYE Step(11/13)
-                case 'ACK':
-                    context.nodeEvent.emit('ack', request);
-                    break;
-                case 'BYE':
-                    context.nodeEvent.emit('bye', request);
-                    break;
-                default:
-                    this.uas.send(SIP.makeResponse(request, 405, 'Method not allowed'));
-                    break;
-            }
-        });
+    //监听端口，接收消息
+    this.uas = SIP.create({publicAddress: this.host, port: this.listen, logger: Logger}, (request) => {
+      switch (request.method) {
+        //当前域 注册/注销 REGISTER
+        case 'REGISTER':
+          context.nodeEvent.emit('register', request);
+          break;
+        //上级域/媒体接收者 INVITE
+        case 'INVITE':
+          context.nodeEvent.emit('invite', request);
+          break;
+        //当前域 MESSAGE 消息
+        case 'MESSAGE':
+          context.nodeEvent.emit('message', request);
+          break;
+        //上级域/媒体接收者 ACK/BYE Step(11/13)
+        case 'ACK':
+          context.nodeEvent.emit('ack', request);
+          break;
+        case 'BYE':
+          context.nodeEvent.emit('bye', request);
+          break;
+        default:
+          this.uas.send(SIP.makeResponse(request, 405, 'Method not allowed'));
+          break;
+      }
+    });
 
-        //注册&注销 请求
-        context.nodeEvent.on('register', (request) => {
-            this.auth(request);
-        });
+    //注册&注销 请求
+    context.nodeEvent.on('register', (request) => {
+      this.auth(request);
+    });
 
-        //处理消息
-        context.nodeEvent.on('message', (request) => {
+    //处理消息
+    context.nodeEvent.on('message', (request) => {
 
-            this.uas.send(SIP.makeResponse(request, 200, 'Ok'));
+      this.uas.send(SIP.makeResponse(request, 200, 'Ok'));
 
-            let userid = SIP.parseUri(request.headers.from.uri).user;
-            //处理消息
-            if (context.sessions.has(userid)) {
-                let session = context.sessions.get(userid);
-                session.onMessage(request);
-            }
-        });
+      let userid = SIP.parseUri(request.headers.from.uri).user;
+      //处理消息
+      if (context.sessions.has(userid)) {
+        let session = context.sessions.get(userid);
+        session.onMessage(request);
+      }
+    });
 
-        Logger.log(`Node Media GB28181 Sip-Server started on port: ${this.listen}`);
-    }
+    Logger.log(`Node Media GB28181 Sip-Server started on port: ${this.listen}`);
+  }
 
-    stop() {
-        //服务器下线
-        this.uas.destroy();
-    }
+  stop() {
+    //服务器下线
+    this.uas.destroy();
+  }
 
-    //身份验证
-    auth(request) {
+  //身份验证
+  auth(request) {
 
-        //用户标识
-        let userid = SIP.parseUri(request.headers.from.uri).user;
+    //用户标识
+    let userid = SIP.parseUri(request.headers.from.uri).user;
 
-        //会话标识
-        if (!this.userinfo[userid])
-            this.userinfo[userid] = { realm: this.config.GB28181.sipServer.realm || "3402000000" };
+    //会话标识
+    if (!this.userinfo[userid])
+      this.userinfo[userid] = {realm: this.config.GB28181.sipServer.realm || "3402000000"};
 
-        //判断是否携带鉴权字段
-        if (!request.headers.authorization || !digest.authenticateRequest(this.userinfo[userid], request, { user: userid, password: this.defaultPassword })) {
-            Logger.log(`[${userid}] Auth ip=${request.headers.via[0].host} port=${request.headers.via[0].port} `);
-            this.uas.send(digest.challenge(this.userinfo[userid], SIP.makeResponse(request, 401, 'Authentication Required')));
+    //判断是否携带鉴权字段
+    if (!request.headers.authorization || !digest.authenticateRequest(this.userinfo[userid], request, {
+      user: userid,
+      password: this.defaultPassword
+    })) {
+      Logger.log(`[${userid}] Auth ip=${request.headers.via[0].host} port=${request.headers.via[0].port} `);
+      this.uas.send(digest.challenge(this.userinfo[userid], SIP.makeResponse(request, 401, 'Authentication Required')));
+    } else {
+      //通过验证 ,增加 Date 字段 （上下级和设备之间校时功能）  回复
+      this.uas.send(SIP.makeResponse(request, 200, 'Ok', {Date: new Date().toJSON()}));
+
+      //注册有效期
+      let expires = request.headers.expires || this.config.GB28181.sipServer.expires;
+
+      //注册/保存会话信息
+      if (parseInt(expires) != 0) {
+
+        let session = context.sessions.get(userid);
+
+        if (!session) {
+          session = new NodeSipSession(this.config, this.userinfo[userid], userid, request.headers.via[0], request.headers.contact, this.uas);
+          session.run();
+        } else {
+          session.session = this.userinfo[userid];
         }
-        else {
-            //通过验证 ,增加 Date 字段 （上下级和设备之间校时功能）  回复
-            this.uas.send(SIP.makeResponse(request, 200, 'Ok', { Date: new Date().toJSON() }));
 
-            //注册有效期
-            let expires = request.headers.expires || this.config.GB28181.sipServer.expires;
+        //过期时间
+        session._expires = expires;
+      } else {
+        //注销
+        if (context.sessions.has(userid)) {
+          let session = context.sessions.get(userid);
+          session.stop();
 
-            //注册/保存会话信息
-            if (parseInt(expires) != 0) {
-
-                let session = context.sessions.get(userid);
-
-                if (!session) {
-                    session = new NodeSipSession(this.config, this.userinfo[userid], userid, request.headers.via[0], request.headers.contact, this.uas);
-                    session.run();
-                }
-                else {
-                    session.session = this.userinfo[userid];
-                }
-
-                //过期时间
-                session._expires = expires;
-            }
-            else {
-                //注销
-                if (context.sessions.has(userid)) {
-                    let session = context.sessions.get(userid);
-                    session.stop();
-
-                    delete this.userinfo[userid];
-                }
-            }
+          delete this.userinfo[userid];
         }
+      }
     }
+  }
 }
 
 module.exports = NodeSIPServer
