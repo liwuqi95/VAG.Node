@@ -9,6 +9,7 @@ class NodeSIPServer {
   constructor(config) {
     this.listen = config.GB28181.sipServer.listen || 5060;
     this.defaultPassword = config.GB28181.sipServer.password || '12345678';
+    this.needAuth = config.GB28181.sipServer.need_auth;
     this.host = config.GB28181.sipServer.host || '0.0.0.0';
     this.config = config;
     //临时用户信息
@@ -82,12 +83,12 @@ class NodeSIPServer {
     //会话标识
     if (!this.userinfo[userid])
       this.userinfo[userid] = {realm: this.config.GB28181.sipServer.realm || "3402000000"};
-
+    
     //判断是否携带鉴权字段
-    if (!request.headers.authorization || !digest.authenticateRequest(this.userinfo[userid], request, {
+    if (this.needAuth && (!request.headers.authorization || !digest.authenticateRequest(this.userinfo[userid], request, {
       user: userid,
       password: this.defaultPassword
-    })) {
+    }))) {
       Logger.log(`[${userid}] Auth ip=${request.headers.via[0].host} port=${request.headers.via[0].port} `);
       this.uas.send(digest.challenge(this.userinfo[userid], SIP.makeResponse(request, 401, 'Authentication Required')));
     } else {

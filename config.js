@@ -11,6 +11,7 @@ var config = module.exports = {
       realm: '3710000000',//SIP服务器域
       password: '',//默认密码
       ack_timeout: 30,//服务端发送ack后，接收回应的超时时间，单位为秒,如果指定时间没有回应，认为失败
+      need_auth: false,
     },
     streamServer: {
       enable: true,//是否启用内置流媒体服务 接收/转码/RTMP推送功能，如有支持GB PS RTP 收流服务器，可以设置为flase
