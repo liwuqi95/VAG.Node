@@ -9,7 +9,7 @@ class NodeSIPServer {
   constructor(config) {
     this.listen = config.GB28181.sipServer.listen || 5060;
     this.defaultPassword = config.GB28181.sipServer.password || '12345678';
-    this.host = config.sipServer.host || '0.0.0.0';
+    this.host = config.GB28181.sipServer.host || '0.0.0.0';
     this.config = config;
     //临时用户信息
     this.userinfo = {};

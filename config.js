@@ -7,7 +7,7 @@ var config = module.exports = {
       host: '10.53.105.107',//本地地址
       mapHost: '10.53.105.107',//外网IP地址
       serial: '37100000002009870002',//SIP服务器编号
-      listen: 5061,//SIP通信端口
+      listen: 5060,//SIP通信端口
       realm: '3710000000',//SIP服务器域
       password: '',//默认密码
       ack_timeout: 30,//服务端发送ack后，接收回应的超时时间，单位为秒,如果指定时间没有回应，认为失败
