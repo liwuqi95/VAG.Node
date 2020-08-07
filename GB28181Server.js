@@ -83,7 +83,7 @@ class NodeSIPServer {
     //会话标识
     if (!this.userinfo[userid])
       this.userinfo[userid] = {realm: this.config.GB28181.sipServer.realm || "3402000000"};
-    
+
     //判断是否携带鉴权字段
     if (this.needAuth && (!request.headers.authorization || !digest.authenticateRequest(this.userinfo[userid], request, {
       user: userid,
