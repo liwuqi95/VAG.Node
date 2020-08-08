@@ -6,4 +6,7 @@ module.exports = [{
   name: 'app',
   exec_mode: 'cluster',
   instances: processCount,
+  error_file: 'err.log',
+  out_file: 'out.log',
+  log_file: 'combined.log',
 }];
